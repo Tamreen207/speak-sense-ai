@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './auth.css';
+import API from '../services/api';
 
 const Register = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -21,6 +23,8 @@ const Register = () => {
   const [step, setStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const experienceLevels = [
     'Student',
@@ -94,6 +98,8 @@ const Register = () => {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
+    } else if (!/(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*])/.test(formData.password)) {
+      newErrors.password = 'Password must contain uppercase, lowercase, number & special character';
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -124,15 +130,36 @@ const Register = () => {
     setStep(1);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const stepErrors = validateStep2();
     
     if (Object.keys(stepErrors).length === 0) {
-      // Submit form - API call would go here
-      console.log('Registration submitted:', formData);
-      alert('Registration successful! Please check your email to verify your account.');
-      // Redirect to dashboard
+      setIsLoading(true);
+      try {
+        const response = await API.post('/auth/register', {
+          name: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          jobTitle: formData.jobTitle,
+          experience: formData.experience,
+          password: formData.password,
+          interests: formData.interests,
+          newsletter: formData.newsletter
+        });
+
+        if (response.data) {
+          localStorage.setItem('token', response.data.token);
+          alert('Registration successful! Please check your email to verify your account.');
+          navigate('/dashboard');
+        }
+      } catch (error) {
+        setApiError(error.response?.data?.message || 'Registration failed. Please try again.');
+        setErrors({ submit: error.response?.data?.message || 'Registration failed' });
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       setErrors(stepErrors);
     }
@@ -140,7 +167,8 @@ const Register = () => {
 
   const handleSocialRegister = (provider) => {
     console.log(`Register with ${provider}`);
-    // Implement social registration logic
+    // Implement social registration logic here
+    setApiError(`${provider} registration coming soon!`);
   };
 
   return (
@@ -169,6 +197,8 @@ const Register = () => {
             <p>Create your account and start practicing</p>
           </div>
 
+          {apiError && <div className="alert alert-error">{apiError}</div>}
+
           <form onSubmit={handleSubmit}>
             {/* Step 1: Basic Information */}
             {step === 1 && (
@@ -186,6 +216,7 @@ const Register = () => {
                     value={formData.fullName}
                     onChange={handleChange}
                     className={errors.fullName ? 'error' : ''}
+                    disabled={isLoading}
                   />
                   {errors.fullName && <span className="error-message">{errors.fullName}</span>}
                 </div>
@@ -203,6 +234,7 @@ const Register = () => {
                     value={formData.email}
                     onChange={handleChange}
                     className={errors.email ? 'error' : ''}
+                    disabled={isLoading}
                   />
                   {errors.email && <span className="error-message">{errors.email}</span>}
                 </div>
@@ -219,6 +251,7 @@ const Register = () => {
                     placeholder="+1 234 567 8900"
                     value={formData.phone}
                     onChange={handleChange}
+                    disabled={isLoading}
                     className={errors.phone ? 'error' : ''}
                   />
                   {errors.phone && <span className="error-message">{errors.phone}</span>}
@@ -274,7 +307,7 @@ const Register = () => {
                   </select>
                 </div>
 
-                <button type="button" className="auth-submit-btn" onClick={handleNext}>
+                <button type="button" className="auth-submit-btn" onClick={handleNext} disabled={isLoading}>
                   Next Step <i className="fas fa-arrow-right"></i>
                 </button>
               </div>
@@ -297,10 +330,12 @@ const Register = () => {
                       value={formData.password}
                       onChange={handleChange}
                       className={errors.password ? 'error' : ''}
+                      disabled={isLoading}
                     />
                     <button
                       type="button"
                       className="password-toggle"
+                      disabled={isLoading}
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       <i className={`fas fa-${showPassword ? 'eye-slash' : 'eye'}`}></i>
@@ -308,7 +343,7 @@ const Register = () => {
                   </div>
                   {errors.password && <span className="error-message">{errors.password}</span>}
                   <div className="password-hint">
-                    Use at least 8 characters with uppercase, lowercase & number
+                    Use at least 8 characters with uppercase, lowercase, number & special character (!@#$%^&*)
                   </div>
                 </div>
 
@@ -326,11 +361,13 @@ const Register = () => {
                       value={formData.confirmPassword}
                       onChange={handleChange}
                       className={errors.confirmPassword ? 'error' : ''}
+                      disabled={isLoading}
                     />
                     <button
                       type="button"
                       className="password-toggle"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      disabled={isLoading}
                     >
                       <i className={`fas fa-${showConfirmPassword ? 'eye-slash' : 'eye'}`}></i>
                     </button>
@@ -351,6 +388,7 @@ const Register = () => {
                           name="interests"
                           value={interest}
                           checked={formData.interests.includes(interest)}
+                          disabled={isLoading}
                           onChange={handleChange}
                         />
                         <span>{interest}</span>
@@ -391,11 +429,20 @@ const Register = () => {
                 </div>
 
                 <div className="form-navigation">
-                  <button type="button" className="btn-outline" onClick={handleBack}>
+                  <button type="button" className="btn-outline" onClick={handleBack} disabled={isLoading}>
                     <i className="fas fa-arrow-left"></i> Back
                   </button>
-                  <button type="submit" className="auth-submit-btn">
-                    Complete Registration <i className="fas fa-check"></i>
+                  <button type="submit" className="auth-submit-btn" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin"></i>
+                        Registering...
+                      </>
+                    ) : (
+                      <>
+                        Complete Registration <i className="fas fa-check"></i>
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -408,7 +455,8 @@ const Register = () => {
                   <button
                     type="button"
                     className="social-btn google"
-                    onClick={() => handleSocialRegister('google')}
+                    onClick={() => handleSocialRegister('Google')}
+                    disabled={isLoading}
                   >
                     <i className="fab fa-google"></i>
                     Google
@@ -416,7 +464,8 @@ const Register = () => {
                   <button
                     type="button"
                     className="social-btn linkedin"
-                    onClick={() => handleSocialRegister('linkedin')}
+                    onClick={() => handleSocialRegister('LinkedIn')}
+                    disabled={isLoading}
                   >
                     <i className="fab fa-linkedin"></i>
                     LinkedIn

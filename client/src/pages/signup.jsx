@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './auth.css';
+import API from '../services/api';
 
 const SignUp = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -14,6 +16,8 @@ const SignUp = () => {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -27,6 +31,10 @@ const SignUp = () => {
         ...errors,
         [name]: ''
       });
+    }
+    // Clear API error when user starts typing
+    if (apiError) {
+      setApiError('');
     }
   };
 
@@ -47,8 +55,8 @@ const SignUp = () => {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
-    } else if (!/(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])/.test(formData.password)) {
-      newErrors.password = 'Password must contain uppercase, lowercase and number';
+    } else if (!/(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*])/.test(formData.password)) {
+      newErrors.password = 'Password must contain uppercase, lowercase, number & special character';
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -62,15 +70,29 @@ const SignUp = () => {
     return newErrors;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = validateForm();
     
     if (Object.keys(newErrors).length === 0) {
-      // Submit form - API call would go here
-      console.log('Form submitted:', formData);
-      // Redirect to dashboard or show success message
-      alert('Sign up successful! Please check your email to verify your account.');
+      setIsLoading(true);
+      try {
+        const response = await API.post('/auth/register', {
+          name: formData.fullName,
+          email: formData.email,
+          password: formData.password
+        });
+
+        if (response.data) {
+          localStorage.setItem('token', response.data.token);
+          alert('Sign up successful! Please check your email to verify your account.');
+          navigate('/dashboard');
+        }
+      } catch (error) {
+        setApiError(error.response?.data?.message || 'Sign up failed. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       setErrors(newErrors);
     }
@@ -79,6 +101,7 @@ const SignUp = () => {
   const handleSocialSignup = (provider) => {
     console.log(`Sign up with ${provider}`);
     // Implement social signup logic here
+    setApiError(`${provider} sign up coming soon!`);
   };
 
   return (
@@ -130,6 +153,8 @@ const SignUp = () => {
             <p>Start your free 14-day trial</p>
           </div>
 
+          {apiError && <div className="alert alert-error">{apiError}</div>}
+
           <form onSubmit={handleSubmit} className="auth-form">
             {/* Full Name */}
             <div className="form-group">
@@ -145,6 +170,7 @@ const SignUp = () => {
                 value={formData.fullName}
                 onChange={handleChange}
                 className={errors.fullName ? 'error' : ''}
+                disabled={isLoading}
               />
               {errors.fullName && <span className="error-message">{errors.fullName}</span>}
             </div>
@@ -162,6 +188,7 @@ const SignUp = () => {
                 placeholder="john@example.com"
                 value={formData.email}
                 onChange={handleChange}
+                disabled={isLoading}
                 className={errors.email ? 'error' : ''}
               />
               {errors.email && <span className="error-message">{errors.email}</span>}
@@ -182,18 +209,20 @@ const SignUp = () => {
                   value={formData.password}
                   onChange={handleChange}
                   className={errors.password ? 'error' : ''}
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
                 >
                   <i className={`fas fa-${showPassword ? 'eye-slash' : 'eye'}`}></i>
                 </button>
               </div>
               {errors.password && <span className="error-message">{errors.password}</span>}
               <div className="password-hint">
-                Must be at least 8 characters with uppercase, lowercase & number
+                Must be at least 8 characters with uppercase, lowercase, number & special character (!@#$%^&*)
               </div>
             </div>
 
@@ -212,11 +241,13 @@ const SignUp = () => {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={errors.confirmPassword ? 'error' : ''}
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  disabled={isLoading}
                 >
                   <i className={`fas fa-${showConfirmPassword ? 'eye-slash' : 'eye'}`}></i>
                 </button>
@@ -242,9 +273,18 @@ const SignUp = () => {
             </div>
 
             {/* Submit Button */}
-            <button type="submit" className="auth-submit-btn">
-              <i className="fas fa-user-plus"></i>
-              Sign Up
+            <button type="submit" className="auth-submit-btn" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <i className="fas fa-spinner fa-spin"></i>
+                  Signing Up...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-user-plus"></i>
+                  Sign Up
+                </>
+              )}
             </button>
 
             {/* Social Signup */}
@@ -256,7 +296,8 @@ const SignUp = () => {
               <button
                 type="button"
                 className="social-btn google"
-                onClick={() => handleSocialSignup('google')}
+                onClick={() => handleSocialSignup('Google')}
+                disabled={isLoading}
               >
                 <i className="fab fa-google"></i>
                 Google
@@ -264,7 +305,8 @@ const SignUp = () => {
               <button
                 type="button"
                 className="social-btn github"
-                onClick={() => handleSocialSignup('github')}
+                onClick={() => handleSocialSignup('GitHub')}
+                disabled={isLoading}
               >
                 <i className="fab fa-github"></i>
                 GitHub
@@ -272,7 +314,8 @@ const SignUp = () => {
               <button
                 type="button"
                 className="social-btn linkedin"
-                onClick={() => handleSocialSignup('linkedin')}
+                onClick={() => handleSocialSignup('LinkedIn')}
+                disabled={isLoading}
               >
                 <i className="fab fa-linkedin"></i>
                 LinkedIn
