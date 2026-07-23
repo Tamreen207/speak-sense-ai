@@ -82,8 +82,6 @@ router.delete("/session/:sessionId", async (req, res) => {
 });
 
 module.exports = router;
-const express = require('express');
-const router = express.Router();
 
 // ---- Grammar Analysis Helpers ---- //
 const grammarPatterns = [

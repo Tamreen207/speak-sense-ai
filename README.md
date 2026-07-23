@@ -34,6 +34,28 @@ Template files are available:
 docker-compose up --build
 ```
 
+## Run locally
+
+The app is split into three parts:
+
+- `client/` for the React frontend
+- `server/` for the Node API
+- `ai-service/` for the FastAPI service
+
+From the repository root, install dependencies and start both web apps:
+
+```bash
+npm install
+npm start
+```
+
+If you want to run them separately:
+
+```bash
+cd server && npm install && npm start
+cd client && npm install && npm start
+```
+
 ## Notes
 
 - Current backend database remains MongoDB.

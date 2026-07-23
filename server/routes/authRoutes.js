@@ -420,10 +420,53 @@ router.put("/change-password", protect, async (req, res) => {
 // @route   POST /api/auth/update-stats
 router.post("/update-stats", protect, async (req, res) => {
   try {
-    const { score, duration, strengths, improvements } = req.body;
-    
+    const { score = 0, duration = 0, strengths = [], improvements = [] } = req.body;
+
     const user = await User.findById(req.user.id);
-    
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (typeof user.updateInterviewStats === "function") {
+      await user.updateInterviewStats(score, duration, strengths, improvements);
+    } else {
+      user.stats = user.stats || {};
+      user.stats.totalInterviews = (user.stats.totalInterviews || 0) + 1;
+      user.stats.interviewsCompleted = (user.stats.interviewsCompleted || 0) + 1;
+      user.stats.totalPracticeTime = (user.stats.totalPracticeTime || 0) + (duration || 0);
+      user.stats.lastInterviewDate = new Date();
+
+      const previousCount = Math.max((user.stats.totalInterviews || 1) - 1, 0);
+      const previousAverage = user.stats.averageScore || 0;
+      const nextAverage = ((previousAverage * previousCount) + (score || 0)) / (previousCount + 1);
+      user.stats.averageScore = Math.round(nextAverage);
+
+      const existingStrengths = Array.isArray(user.stats.strengths) ? user.stats.strengths : [];
+      const existingImprovements = Array.isArray(user.stats.areasForImprovement) ? user.stats.areasForImprovement : [];
+
+      if (Array.isArray(strengths) && strengths.length) {
+        user.stats.strengths = [...new Set([...existingStrengths, ...strengths])].slice(0, 10);
+      }
+
+      if (Array.isArray(improvements) && improvements.length) {
+        user.stats.areasForImprovement = [...new Set([...existingImprovements, ...improvements])].slice(0, 10);
+      }
+
+      await user.save();
+    }
+
+    return res.json({
+      success: true,
+      message: "Statistics updated successfully",
+      stats: user.stats
+    });
+  } catch (error) {
+    console.error("Stats update error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.post("/social", async (req, res) => {
   try {
     const { provider, mode } = req.body;
@@ -454,59 +497,6 @@ router.post("/demo", async (_req, res) => {
   } catch (error) {
     console.error("Demo auth error:", error);
     return res.status(500).json({ message: "Server error during demo login" });
-  }
-});
-
-router.get("/me", async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-    if (!token) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).lean();
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Update statistics if the method exists
-    if (user.updateInterviewStats) {
-      await user.updateInterviewStats(score, duration, strengths, improvements);
-    } else {
-      // Manual update if method doesn't exist
-      user.stats.totalInterviews += 1;
-      user.stats.interviewsCompleted += 1;
-      user.stats.totalPracticeTime += duration || 0;
-      user.stats.lastInterviewDate = new Date();
-      
-      // Update average score
-      const totalScore = (user.stats.averageScore * (user.stats.totalInterviews - 1) + score) / user.stats.totalInterviews;
-      user.stats.averageScore = Math.round(totalScore);
-      
-      // Update strengths and improvements
-      if (strengths && strengths.length) {
-        user.stats.strengths = [...new Set([...user.stats.strengths, ...strengths])].slice(0, 10);
-      }
-      
-      if (improvements && improvements.length) {
-        user.stats.areasForImprovement = [...new Set([...user.stats.areasForImprovement, ...improvements])].slice(0, 10);
-      }
-      
-      await user.save();
-    }
-
-    res.json({
-      success: true,
-      message: "Statistics updated successfully",
-      stats: user.stats
-    });
-  } catch (error) {
-    console.error("Stats update error:", error);
-    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -602,22 +592,7 @@ router.post("/reset-password/:token", async (req, res) => {
     });
   } catch (error) {
     console.error("Reset password error:", error);
-    res.status(500).json({ message: "Server error" });
-    return res.status(200).json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        industry: user.industry || "",
-        experience: user.experience || "",
-        company: user.company || "",
-        jobTitle: user.jobTitle || "",
-        interests: user.interests || [],
-        authProvider: user.authProvider || "local"
-      }
-    });
-  } catch (error) {
-    return res.status(401).json({ message: "Unauthorized" });
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
